@@ -55,7 +55,10 @@ export function ActionsList() {
 
       try {
         setIsLoading(true)
-        const integrationActions = await integrationApp.integration(selectedIntegration).actions.list()
+        const response = await integrationApp.integration(selectedIntegration).actions.list()
+        
+        // Handle paginated response - extract items array
+        const integrationActions = response?.items || response || []
 
         setActions(prev => ({
           ...prev,
@@ -63,6 +66,11 @@ export function ActionsList() {
         }))
       } catch (error) {
         console.error(`Failed to fetch actions for ${selectedIntegration}:`, error)
+        // Set empty array on error to prevent map errors
+        setActions(prev => ({
+          ...prev,
+          [selectedIntegration]: []
+        }))
       } finally {
         setIsLoading(false)
       }
@@ -132,14 +140,14 @@ export function ActionsList() {
                 <div className="flex items-center justify-center h-full">
                   <div className="text-gray-500 dark:text-gray-400">Loading actions...</div>
                 </div>
-              ) : !actions[integration.key] || actions[integration.key].length === 0 ? (
+              ) : !actions[integration.key] || !Array.isArray(actions[integration.key]) || actions[integration.key].length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-gray-500 dark:text-gray-400">No actions available</div>
                 </div>
               ) : (
                 <ScrollArea className="h-full">
                   <div className="p-4 space-y-2">
-                    {actions[integration.key].map((action) => (
+                    {Array.isArray(actions[integration.key]) && actions[integration.key].map((action) => (
                       <Card
                         key={action.id}
                         className="p-2 rounded-none border border-gray-200 dark:border-gray-800 shadow-none"

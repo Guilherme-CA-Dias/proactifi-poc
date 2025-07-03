@@ -63,13 +63,20 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
 
     try {
       setIsLoadingActions(true);
-      const actionsList = await integrationApp
+      const response = await integrationApp
         .integration(integrationKey)
         .actions
         .list();
-      setActions(actionsList);
+      
+      // Handle paginated response - extract items array
+      const actionsList = response?.items || response || [];
+      console.log('Actions response:', response);
+      console.log('Extracted actions:', actionsList);
+      setActions(Array.isArray(actionsList) ? actionsList : []);
     } catch (error) {
       console.error('Failed to load actions:', error);
+      // Set empty array on error to prevent map errors
+      setActions([]);
     } finally {
       setIsLoadingActions(false);
     }
@@ -187,7 +194,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="placeholder">Select Action</SelectItem>
-                        {actions.map(action => (
+                        {Array.isArray(actions) && actions.map(action => (
                           <SelectItem key={`action-${action.key}`} value={action.key}>
                             {action.name || action.key}
                           </SelectItem>

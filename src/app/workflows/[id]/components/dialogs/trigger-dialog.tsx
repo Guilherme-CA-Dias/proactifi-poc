@@ -53,9 +53,12 @@ export function TriggerDialog({ open, onClose, onSubmit, node, mode = 'create' }
       if (!connection?.integration?.id) return;
       
       try {
-        const triggersList = await integrationApp
+        const response = await integrationApp
           .integration(connection.integration.id)
           .flows.list();
+        
+        // Handle paginated response - extract items array
+        const triggersList = response?.items || response || [];
 
         if (!mounted) return;
 
@@ -284,7 +287,7 @@ export function TriggerDialog({ open, onClose, onSubmit, node, mode = 'create' }
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="">Select trigger</option>
-                    {state.triggers.map((trigger) => (
+                    {Array.isArray(state.triggers) && state.triggers.map((trigger) => (
                       <option key={trigger.key} value={trigger.key}>
                         {trigger.name || trigger.key}
                       </option>

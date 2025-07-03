@@ -6,7 +6,8 @@ import { Action, ErrorData } from "@integration-app/sdk"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Play } from "lucide-react"
-import ReactJson from 'react-json-view'
+import JSONPretty from 'react-json-pretty'
+import 'react-json-pretty/themes/monikai.css'
 
 interface RunActionDialogProps {
   isOpen: boolean
@@ -132,12 +133,9 @@ export function RunActionDialog({
               {runResult ? (
                 <Card className="p-0 bg-transparent border-0 shadow-none h-full">
                   <div className="p-4 h-full overflow-auto">
-                    <ReactJson
-                      src={runResult as object}
-                      name={false}
-                      theme="rjv-default"
-                      displayDataTypes={false}
-                      enableClipboard={false}
+                    <JSONPretty
+                      data={runResult}
+                      theme="monikai"
                       style={{
                         backgroundColor: 'transparent',
                         fontSize: '0.75rem'
