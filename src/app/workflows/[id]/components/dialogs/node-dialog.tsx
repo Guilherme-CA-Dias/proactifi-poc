@@ -80,11 +80,17 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit, workflowNodes 
     const connection = connections?.find((conn: any) => conn.id === connectionId);
     const integrationKey = connection?.integration?.key || '';
 
+    // Preserve action data if we're editing an existing node
+    const isEditing = mode === 'configure' && node;
+    const currentActionKey = isEditing ? node?.actionKey : '';
+    const currentActionId = isEditing ? node?.actionId : '';
+
     setFormData((prev: any) => ({
       ...prev,
       connectionId,
       integrationKey,
-      actionKey: ''
+      actionKey: isEditing ? currentActionKey || '' : '',
+      actionId: isEditing ? currentActionId || '' : ''
     }));
 
     // Fetch field mappings for the selected connection
@@ -176,6 +182,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit, workflowNodes 
   // Initialize form data based on mode
   useEffect(() => {
     if (open) {
+      console.log('Opening dialog with mode:', mode, 'node:', node);
       setFormData(mode === 'configure' && node ? {
         name: node.name,
         integrationKey: node.integrationKey,
@@ -201,10 +208,27 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit, workflowNodes 
       
       // Load actions if we're editing a node and have connection info
       if (mode === 'configure' && node && node.integrationKey && node.connectionId) {
+        console.log('Loading actions for existing node:', node.actionKey, node.actionId);
         handleIntegrationChange(node.connectionId);
       }
     }
   }, [open, mode, node]);
+
+  // Effect to restore selected action when editing and actions are loaded
+  useEffect(() => {
+    if (mode === 'configure' && node && actions.length > 0 && formData.actionKey && !formData.actionId) {
+      console.log('Restoring action for existing node. Looking for actionKey:', formData.actionKey, 'Available actions:', actions.map(a => a.key));
+      // Find the action that matches the stored actionKey
+      const existingAction = actions.find((a: Action) => a.key === formData.actionKey);
+      if (existingAction) {
+        console.log('Found existing action:', existingAction);
+        setFormData((prev: any) => ({
+          ...prev,
+          actionId: existingAction.id
+        }));
+      }
+    }
+  }, [mode, node, actions.length, formData.actionKey, formData.actionId]);
 
   // Effect to fetch outputMapping for existing nodes when actions are loaded
   useEffect(() => {
