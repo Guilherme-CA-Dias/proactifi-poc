@@ -6,6 +6,8 @@ import type { NodeDialogProps, WorkflowNode, Action } from '../types/workflow';
 import { getIntegrationName } from '../utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
+import { fetchIntegrationToken } from '@/lib/auth';
+import { authenticatedFetcher } from '@/lib/fetch-utils';
 
 export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogProps) {
   const { connections, loading: isLoadingConnections } = useConnections();
@@ -22,6 +24,9 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
     type: 'action',
     flowKey: ''
   });
+  const [fieldMappings, setFieldMappings] = useState<any[]>([]);
+  const [selectedFieldMapping, setSelectedFieldMapping] = useState<string>("");
+  const [isLoadingFieldMappings, setIsLoadingFieldMappings] = useState(false);
 
   // Update useAction to use undefined instead of null
   const { action } = useAction(
@@ -61,6 +66,28 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
       actionKey: ''
     }));
 
+    // Fetch field mappings for the selected connection
+    setIsLoadingFieldMappings(true);
+    setFieldMappings([]);
+    setSelectedFieldMapping("");
+    try {
+      if (integrationKey) {
+        const token = await fetchIntegrationToken();
+        const res = await fetch(`https://api.integration.app/integrations/${integrationKey}/field-mappings`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const response = await res.json();
+        const mappings = response?.items || response || [];
+        setFieldMappings(Array.isArray(mappings) ? mappings : []);
+      }
+    } catch (error) {
+      setFieldMappings([]);
+    } finally {
+      setIsLoadingFieldMappings(false);
+    }
+
     try {
       setIsLoadingActions(true);
       const response = await integrationApp
@@ -70,8 +97,6 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
       
       // Handle paginated response - extract items array
       const actionsList = response?.items || response || [];
-      console.log('Actions response:', response);
-      console.log('Extracted actions:', actionsList);
       setActions(Array.isArray(actionsList) ? actionsList : []);
     } catch (error) {
       console.error('Failed to load actions:', error);
@@ -182,6 +207,42 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* Field Mapping Dropdown and Button - moved above action selection */}
+                  {formData.connectionId && !isLoadingFieldMappings && fieldMappings.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Field Mapping</label>
+                      <Select
+                        value={selectedFieldMapping || "placeholder"}
+                        onValueChange={setSelectedFieldMapping}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select Field Mapping" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="placeholder">Select Field Mapping</SelectItem>
+                          {fieldMappings.map((mapping) => (
+                            <SelectItem key={mapping.key} value={mapping.key}>
+                              {mapping.name || mapping.key}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedFieldMapping && selectedFieldMapping !== "placeholder" && (
+                        <Button
+                          variant="secondary"
+                          className="mt-2"
+                          onClick={async () => {
+                            await integrationApp
+                              .connection(formData.connectionId)
+                              .fieldMapping(selectedFieldMapping)
+                              .openConfiguration();
+                          }}
+                        >
+                          Open Field Mapping Configuration
+                        </Button>
+                      )}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Action</label>
                     <Select

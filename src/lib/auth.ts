@@ -53,3 +53,9 @@ export function clearAuth(): void {
   localStorage.removeItem(AUTH_ID_KEY);
   localStorage.removeItem(CUSTOMER_NAME_KEY);
 } 
+
+export async function fetchIntegrationToken(): Promise<string | null> {
+  const res = await fetch('/api/integration-token');
+  const data = await res.json();
+  return data.token || null;
+}

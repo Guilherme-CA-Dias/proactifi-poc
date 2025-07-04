@@ -6,6 +6,7 @@ import { Action, DataSchema } from '@integration-app/sdk'
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import { JSONViewer } from "@/components/ui/json-viewer"
 
 interface ActionSchemasProps {
   actionId: string
@@ -13,17 +14,26 @@ interface ActionSchemasProps {
 }
 
 function SchemaView({ schema, title }: { schema: DataSchema | undefined, title: string }) {
-  return (
-    <div className="mt-2 space-y-2">
-      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{title}</h4>
-      <div className="max-w-[350px] overflow-x-auto">
-        <div className="bg-gray-50 dark:bg-gray-900 rounded-md p-3 text-sm">
-          <code className="text-gray-800 dark:text-gray-200">
-            {JSON.stringify(schema || {}, null, 2)}
-          </code>
+  if (!schema || Object.keys(schema).length === 0) {
+    return (
+      <div className="mt-2 space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{title}</h4>
+          <span className="text-xs text-gray-500 dark:text-gray-400">No schema available</span>
         </div>
       </div>
-    </div>
+    )
+  }
+
+  return (
+    <JSONViewer
+      data={schema}
+      title={title}
+      defaultExpanded={true}
+      maxHeight="300px"
+      showCopyButton={true}
+      showSearch={true}
+    />
   )
 }
 

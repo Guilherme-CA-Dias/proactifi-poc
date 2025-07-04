@@ -1,63 +1,192 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronRight, ChevronDown } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { ChevronDown, ChevronRight, Copy, Check, Search, X } from "lucide-react"
+import JSONPretty from 'react-json-pretty'
+import 'react-json-pretty/themes/monikai.css'
 
-interface JsonViewerProps {
+interface JSONViewerProps {
   data: any
-  level?: number
-  expanded?: boolean
+  title?: string
+  defaultExpanded?: boolean
+  maxHeight?: string
+  showCopyButton?: boolean
+  showSearch?: boolean
 }
 
-export function JsonViewer({ data, level = 0, expanded = true }: JsonViewerProps) {
-  const [isExpanded, setIsExpanded] = useState(expanded)
-  const type = Array.isArray(data) ? "array" : typeof data
-  const isExpandable = type === "object" || type === "array"
+export function JSONViewer({
+  data,
+  title,
+  defaultExpanded = true,
+  maxHeight = "400px",
+  showCopyButton = true,
+  showSearch = false
+}: JSONViewerProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const [copied, setCopied] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [showSearchInput, setShowSearchInput] = useState(false)
 
-  if (data === null) return <span className="text-gray-500">null</span>
-  if (type === "undefined") return <span className="text-gray-500">undefined</span>
-  if (type === "string") return <span className="text-green-600 dark:text-green-400">"{data}"</span>
-  if (type === "number") return <span className="text-blue-600 dark:text-blue-400">{data}</span>
-  if (type === "boolean") return <span className="text-purple-600 dark:text-purple-400">{data.toString()}</span>
-
-  if (isExpandable) {
-    const isEmpty = Object.keys(data).length === 0
-    if (isEmpty) {
-      return <span className="text-gray-500">{type === "array" ? "[]" : "{}"}</span>
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error)
     }
+  }
 
+  const filteredData = searchTerm ? filterObjectBySearch(data, searchTerm) : data
+
+  if (!data || Object.keys(data).length === 0) {
     return (
-      <div className="relative">
-        <div className="inline-flex items-center cursor-pointer hover:text-blue-500">
-          <div onClick={() => setIsExpanded(!isExpanded)}>
-            {isExpanded ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-          </div>
-          <span className="text-gray-500 dark:text-gray-400">
-            {type === "array" ? "[" : "{"}
-          </span>
+      <div className="mt-2 space-y-2">
+        <div className="flex items-center justify-between">
+          {title && <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{title}</h4>}
+          <span className="text-xs text-gray-500 dark:text-gray-400">No data available</span>
         </div>
-        
-        {isExpanded && (
-          <div className="ml-3 border-l border-gray-200 dark:border-gray-700 pl-2">
-            {Object.entries(data).map(([key, value], index) => (
-              <div key={key} className="leading-tight">
-                <span className="text-gray-800 dark:text-gray-200">{type === "array" ? "" : `"${key}": `}</span>
-                <JsonViewer data={value} level={level + 1} />
-                {index < Object.entries(data).length - 1 && <span className="text-gray-500">,</span>}
-              </div>
-            ))}
-          </div>
-        )}
-        <span className="text-gray-500 dark:text-gray-400">
-          {type === "array" ? "]" : "}"}
-        </span>
       </div>
     )
   }
 
-  return <span>{String(data)}</span>
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+          {title && <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{title}</h4>}
+        </div>
+        
+        <div className="flex items-center space-x-1">
+          {showSearch && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={() => setShowSearchInput(!showSearchInput)}
+            >
+              {showSearchInput ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+            </Button>
+          )}
+          {showCopyButton && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={handleCopy}
+            >
+              {copied ? (
+                <Check className="h-4 w-4 text-green-600" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {showSearch && showSearchInput && (
+        <div className="flex items-center space-x-2">
+          <Input
+            placeholder="Search in JSON..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-8 text-sm"
+          />
+          {searchTerm && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setSearchTerm("")}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
+      
+      {isExpanded && (
+        <div className="w-full overflow-hidden">
+          <div 
+            className="bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-600"
+            style={{ maxHeight }}
+          >
+            <div className="overflow-y-auto overflow-x-auto" style={{ maxHeight }}>
+              <JSONPretty
+                data={filteredData}
+                theme="monikai"
+                style={{
+                  backgroundColor: 'transparent',
+                  fontSize: '0.75rem',
+                  padding: '0.75rem',
+                  margin: '0',
+                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+                  minWidth: 'fit-content',
+                  wordBreak: 'break-all',
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'break-word'
+                }}
+                mainStyle="padding: 0; margin: 0;"
+                valueStyle="color: #a6e22e; word-break: break-all; white-space: pre-wrap; overflow-wrap: break-word;"
+                keyStyle="color: #f92672;"
+                stringStyle="color: #e6db74; word-break: break-all; white-space: pre-wrap; overflow-wrap: break-word;"
+                booleanStyle="color: #ae81ff;"
+                nullStyle="color: #f92672;"
+                undefinedStyle="color: #f92672;"
+                numberStyle="color: #ae81ff;"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Helper function to filter object by search term
+function filterObjectBySearch(obj: any, searchTerm: string): any {
+  if (typeof obj !== 'object' || obj === null) {
+    return obj
+  }
+
+  if (Array.isArray(obj)) {
+    return obj
+      .map(item => filterObjectBySearch(item, searchTerm))
+      .filter(item => item !== null && item !== undefined)
+  }
+
+  const filtered: any = {}
+  const searchLower = searchTerm.toLowerCase()
+
+  for (const [key, value] of Object.entries(obj)) {
+    // Check if key or value contains search term
+    const keyMatches = key.toLowerCase().includes(searchLower)
+    const valueMatches = typeof value === 'string' && value.toLowerCase().includes(searchLower)
+    
+    if (keyMatches || valueMatches) {
+      filtered[key] = value
+    } else if (typeof value === 'object' && value !== null) {
+      const filteredValue = filterObjectBySearch(value, searchTerm)
+      if (Object.keys(filteredValue).length > 0) {
+        filtered[key] = filteredValue
+      }
+    }
+  }
+
+  return filtered
 } 
