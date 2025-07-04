@@ -22,6 +22,7 @@ interface TriggerState {
   name: string;
   triggers: Flow[];
   isSaving: boolean;
+  outputMapping?: DataSchema;
 }
 
 const initialState: TriggerState = {
@@ -31,6 +32,7 @@ const initialState: TriggerState = {
   name: '',
   triggers: [],
   isSaving: false,
+  outputMapping: undefined,
 };
 
 export function TriggerDialog({ open, onClose, onSubmit, node, mode = 'create' }: TriggerDialogProps) {
@@ -121,6 +123,36 @@ export function TriggerDialog({ open, onClose, onSubmit, node, mode = 'create' }
     };
   }, [state.connection?.id, mode, node, open, integrationApp]);
 
+  // Effect to fetch outputMapping for existing triggers when flows are loaded
+  useEffect(() => {
+    if (mode === 'edit' && node && node.actionId && state.triggers.length > 0 && !state.outputMapping) {
+      // Find the flow that matches the stored actionId
+      const existingFlow = state.triggers.find(t => t.id === node.actionId);
+      if (existingFlow && !state.flow) {
+        setState(prev => ({
+          ...prev,
+          flow: existingFlow
+        }));
+        
+        // Fetch the output schema for the existing trigger
+        const fetchExistingTriggerSchema = async () => {
+          try {
+            if (existingFlow.outputSchema) {
+              setState(prev => ({
+                ...prev,
+                outputMapping: existingFlow.outputSchema
+              }));
+            }
+          } catch (error) {
+            console.error('Failed to fetch existing trigger output schema:', error);
+          }
+        };
+        
+        fetchExistingTriggerSchema();
+      }
+    }
+  }, [mode, node, state.triggers.length, state.outputMapping, state.flow]);
+
   const handleIntegrationChange = (connectionId: string) => {
     const connection = connections?.find(c => c.id === connectionId);
     if (!connection?.integration?.id) return;
@@ -164,6 +196,20 @@ export function TriggerDialog({ open, onClose, onSubmit, node, mode = 'create' }
         ...prev,
         parameters: customerFlow.parameters || {},
       }));
+
+      // Fetch and store the output schema for this trigger
+      try {
+        // Store the flow's output schema if available
+        if (trigger.outputSchema) {
+          setState(prev => ({
+            ...prev,
+            outputMapping: trigger.outputSchema
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch trigger output schema:', error);
+      }
+
     } catch (error) {
       console.error('Failed to load trigger parameters:', error);
     }
@@ -192,7 +238,9 @@ export function TriggerDialog({ open, onClose, onSubmit, node, mode = 'create' }
         parametersSchema: state.flow.parametersSchema as DataSchema,
         instanceKey: node?.instanceKey || "12",
         actionKey: state.flow.key,
-        inputMapping: node?.inputMapping || {}
+        actionId: state.flow.id,
+        inputMapping: node?.inputMapping || {},
+        outputMapping: state.outputMapping
       });
 
       setState(initialState);

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { fetchIntegrationToken } from '@/lib/auth';
 import { authenticatedFetcher } from '@/lib/fetch-utils';
 
-export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogProps) {
+export function NodeDialog({ mode, node, open, onClose, onSubmit, workflowNodes }: NodeDialogProps) {
   const { connections, loading: isLoadingConnections } = useConnections();
   const integrationApp = useIntegrationApp();
   const [actions, setActions] = useState<Action[]>([]);
@@ -20,6 +20,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
     integrationKey: '',
     connectionId: '',
     actionKey: '',
+    actionId: '',
     inputMapping: {},
     type: 'action',
     flowKey: ''
@@ -27,6 +28,26 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
   const [fieldMappings, setFieldMappings] = useState<any[]>([]);
   const [selectedFieldMapping, setSelectedFieldMapping] = useState<string>("");
   const [isLoadingFieldMappings, setIsLoadingFieldMappings] = useState(false);
+
+  // Prepare variables for DataInput (outputs from previous nodes)
+  const variablesSchema = (workflowNodes || [])
+    .filter((n: WorkflowNode) => n.id !== node?.id) // Include both triggers and actions
+    .reduce((acc: any, n: WorkflowNode) => {
+      // Use the output mapping from the node if available
+      if (n.outputMapping) {
+        acc[n.id] = {
+          ...n.outputMapping,
+          title: `${n.name} (${n.type})`,
+          description: `Output from ${n.name}`
+        };
+      }
+      return acc;
+    }, {});
+
+  const variablesSchemaDataSchema = {
+    type: 'object',
+    properties: variablesSchema
+  };
 
   // Update useAction to use undefined instead of null
   const { action } = useAction(
@@ -38,7 +59,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
       : undefined
   );
   // Add integrationOptions
-  const integrationOptions = connections?.map(conn => ({
+  const integrationOptions = connections?.map((conn: any) => ({
     value: conn.id,
     label: conn.name || conn.integration?.key || ''
   })) || [];
@@ -47,7 +68,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
   const handleIntegrationChange = async (connectionId: string) => {
     // Skip if placeholder is selected
     if (connectionId === "placeholder") {
-      setFormData(prev => ({
+      setFormData((prev: any) => ({
         ...prev,
         connectionId: '',
         integrationKey: '',
@@ -56,10 +77,10 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
       return;
     }
 
-    const connection = connections?.find(conn => conn.id === connectionId);
+    const connection = connections?.find((conn: any) => conn.id === connectionId);
     const integrationKey = connection?.integration?.key || '';
 
-    setFormData(prev => ({
+    setFormData((prev: any) => ({
       ...prev,
       connectionId,
       integrationKey,
@@ -111,18 +132,35 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
   const handleActionChange = async (actionKey: string) => {
     // Skip if placeholder is selected
     if (actionKey === "placeholder") {
-      setFormData(prev => ({ ...prev, actionKey: '' }));
+      setFormData((prev: any) => ({ ...prev, actionKey: '', actionId: '', outputMapping: undefined }));
       return;
     }
 
-    setFormData(prev => ({ ...prev, actionKey }));
-    const action = actions.find(a => a.key === actionKey);
-    if (!formData.name && action) {
-      setFormData(prev => ({
+    setFormData((prev: any) => ({ ...prev, actionKey, actionId: '', outputMapping: undefined }));
+    const foundAction = actions.find((a: Action) => a.key === actionKey);
+    if (!formData.name && foundAction) {
+      setFormData((prev: any) => ({
         ...prev,
         actionKey,
-        name: `${getIntegrationName(connections?.find(c => c.id === prev.connectionId))} ${action.name || action.key}`
+        actionId: foundAction.id,
+        name: `${getIntegrationName(connections?.find((c: any) => c.id === prev.connectionId))} ${foundAction.name || foundAction.key}`
       }));
+    }
+
+    // Fetch and store the output schema for this action
+    if (foundAction && foundAction.id && formData.connectionId) {
+      try {
+        const actionData = await integrationApp.action(foundAction.id).get();
+        if (actionData.defaultOutputSchema) {
+          setFormData((prev: any) => ({
+            ...prev,
+            actionId: foundAction.id,
+            outputMapping: actionData.defaultOutputSchema
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch action output schema:', error);
+      }
     }
 
     // Set loading state for action schema
@@ -143,7 +181,9 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
         integrationKey: node.integrationKey,
         connectionId: node.connectionId,
         actionKey: node.actionKey,
+        actionId: node.actionId || '',
         inputMapping: node.inputMapping,
+        outputMapping: node.outputMapping,
         type: 'action',
         flowKey: node.flowKey || ''
       } : {
@@ -151,13 +191,42 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
         integrationKey: '',
         connectionId: '',
         actionKey: '',
+        actionId: '',
         inputMapping: {},
+        outputMapping: undefined,
         type: 'action',
         flowKey: ''
       });
       setActions([]);
+      
+      // Load actions if we're editing a node and have connection info
+      if (mode === 'configure' && node && node.integrationKey && node.connectionId) {
+        handleIntegrationChange(node.connectionId);
+      }
     }
   }, [open, mode, node]);
+
+  // Effect to fetch outputMapping for existing nodes when actions are loaded
+  useEffect(() => {
+    if (mode === 'configure' && node && formData.actionKey && formData.actionId && actions.length > 0 && !formData.outputMapping) {
+      // Fetch the output schema for the existing action
+      const fetchExistingActionSchema = async () => {
+        try {
+          const actionData = await integrationApp.action(formData.actionId).get();
+          if (actionData.defaultOutputSchema) {
+            setFormData((prev: any) => ({
+              ...prev,
+              outputMapping: actionData.defaultOutputSchema
+            }));
+          }
+        } catch (error) {
+          console.error('Failed to fetch existing action output schema:', error);
+        }
+      };
+      
+      fetchExistingActionSchema();
+    }
+  }, [mode, node, formData.actionKey, formData.actionId, actions.length, formData.outputMapping, integrationApp]);
 
   // ... rest of the dialog logic ...
 
@@ -181,7 +250,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
                 <Input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData((prev: any) => ({ ...prev, name: e.target.value }))}
                   className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
                 />
               </div>
@@ -199,7 +268,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="placeholder">Select Integration</SelectItem>
-                        {integrationOptions.map(option => (
+                        {integrationOptions.map((option: { value: string; label: string }) => (
                           <SelectItem key={`integration-${option.value}`} value={option.value}>
                             {option.label}
                           </SelectItem>
@@ -220,7 +289,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="placeholder">Select Field Mapping</SelectItem>
-                          {fieldMappings.map((mapping) => (
+                          {fieldMappings.map((mapping: any) => (
                             <SelectItem key={mapping.key} value={mapping.key}>
                               {mapping.name || mapping.key}
                             </SelectItem>
@@ -255,7 +324,7 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="placeholder">Select Action</SelectItem>
-                        {Array.isArray(actions) && actions.map(action => (
+                        {Array.isArray(actions) && actions.map((action: Action) => (
                           <SelectItem key={`action-${action.key}`} value={action.key}>
                             {action.name || action.key}
                           </SelectItem>
@@ -298,10 +367,11 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
                         <DataInput
                           schema={action?.inputSchema}
                           value={formData.inputMapping}
-                          onChange={(value) => setFormData(prev => ({
+                          onChange={(value: any) => setFormData((prev: any) => ({
                             ...prev,
                             inputMapping: value
                           }))}
+                          variablesSchema={variablesSchemaDataSchema}
                         />
                       </IntegrationElementProvider>
                     </IntegrationAppClientProvider>
@@ -314,7 +384,9 @@ export function NodeDialog({ mode, node, open, onClose, onSubmit }: NodeDialogPr
             <div className="flex justify-end space-x-2">
               <Button variant="outline" onClick={onClose}>Cancel</Button>
               <Button
-                onClick={() => onSubmit(formData)}
+                onClick={() => {
+                  onSubmit(formData);
+                }}
                 disabled={!formData.name || (mode === 'create' && (!formData.connectionId || !formData.actionKey))}
               >
                 {mode === 'create' ? 'Create' : 'Save Changes'}

@@ -11,7 +11,12 @@ export interface WorkflowNode {
   parametersSchema?: DataSchema;
   instanceKey?: string;
   actionKey?: string;
+  actionId?: string;
   inputMapping: Record<string, unknown>;
+  outputSchema?: DataSchema;
+  outputMapping?: DataSchema;
+  lastExecutedAt?: string;
+  executionStatus?: 'pending' | 'running' | 'completed' | 'failed';
 }
 
 export interface FlowBlock {
@@ -36,6 +41,7 @@ export interface NodeDialogProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (node: Omit<WorkflowNode, 'id'>) => void;
+  workflowNodes?: WorkflowNode[];
 }
 
 export interface PlusNodeProps {

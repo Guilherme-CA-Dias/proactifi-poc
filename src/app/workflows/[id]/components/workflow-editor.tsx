@@ -58,6 +58,19 @@ function WorkflowEditorInner() {
   const [createNodeData, setCreateNodeData] = useState<{ afterId: string } | null>(null);
   const [showTriggerDialog, setShowTriggerDialog] = useState(false);
 
+  const loadWorkflow = async () => {
+    try {
+      const response = await fetch(`/api/workflows/${id}`);
+      if (!response.ok) throw new Error('Failed to load workflow');
+      const workflow = await response.json();
+      if (workflow.nodes?.length > 0) {
+        setNodes(workflow.nodes);
+      }
+    } catch (error) {
+      console.error('Failed to load workflow:', error);
+    }
+  };
+
   const handleDeleteNode = async (nodeId: string) => {
     const updatedNodes = nodes.filter(n => n.id !== nodeId);
     try {
@@ -247,19 +260,6 @@ function WorkflowEditorInner() {
   };
 
   useEffect(() => {
-    const loadWorkflow = async () => {
-      try {
-        const response = await fetch(`/api/workflows/${id}`);
-        if (!response.ok) throw new Error('Failed to load workflow');
-        const workflow = await response.json();
-        if (workflow.nodes?.length > 0) {
-          setNodes(workflow.nodes);
-        }
-      } catch (error) {
-        console.error('Failed to load workflow:', error);
-      }
-    };
-
     loadWorkflow();
   }, [id]);
 
@@ -295,6 +295,7 @@ function WorkflowEditorInner() {
           setCreateNodeData(null);
         }}
         onSubmit={selectedNode ? handleSaveNode : handleCreateNode}
+        workflowNodes={selectedNode ? nodes.filter(n => n.id !== selectedNode.id) : nodes}
       />
       <TriggerDialog
         mode={selectedTrigger ? 'edit' : 'create'}
